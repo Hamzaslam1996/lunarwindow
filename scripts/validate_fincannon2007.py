@@ -69,9 +69,15 @@ def git_commit() -> str:
 
 
 def illumination_series(
-    dem: LolaDem, lat: float, lon: float, height_m: float, ets: np.ndarray, n_az: int
+    dem: LolaDem,
+    lat: float,
+    lon: float,
+    height_m: float,
+    ets: np.ndarray,
+    n_az: int,
+    step_m: float | None = None,
 ) -> tuple[np.ndarray, geo.Site]:
-    hz = dem.horizon(lon, lat, height_m=height_m, n_az=n_az)
+    hz = dem.horizon(lon, lat, height_m=height_m, n_az=n_az, step_m=step_m)
     elev = float(dem.elevation_at(lon, lat)[0])
     site = geo.Site("probe", lat, lon, elev_m=elev, height_m=height_m)
     az, el, dist = geo.sun_az_el(site, ets)
@@ -102,8 +108,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--years", nargs="+", type=int, default=[2024, 2025, 2026])
     ap.add_argument("--step-h", type=float, default=1.0)
     ap.add_argument("--n-az", type=int, default=720)
-    ap.add_argument("--search-radius-m", type=float, default=1000.0, help="0 disables the search")
-    ap.add_argument("--search-step-m", type=float, default=250.0)
+    ap.add_argument("--search-radius-m", type=float, default=3000.0, help="0 disables the search")
+    ap.add_argument("--search-step-m", type=float, default=200.0)
+    ap.add_argument(
+        "--search-top-fraction",
+        type=float,
+        default=0.2,
+        help="evaluate only the highest fraction of grid points by elevation (crest candidates)",
+    )
+    ap.add_argument("--search-n-az", type=int, default=180)
     ap.add_argument("--dem", type=Path, default=default_dem_path())
     ap.add_argument("--out", type=Path, default=Path("docs/validation/fincannon2007.json"))
     args = ap.parse_args(argv)
@@ -170,9 +183,18 @@ def main(argv: list[str] | None = None) -> int:
             if args.search_radius_m > 0:
                 best = None
                 grid = neighbourhood(dem, lat, lon, args.search_radius_m, args.search_step_m)
-                print(f"  searching {len(grid)} points within {args.search_radius_m:g} m ...")
-                for lo, la, dx, dy in grid:
-                    f2, _ = illumination_series(dem, la, lo, h, ets, max(180, args.n_az // 2))
+                elevs = np.array([float(dem.elevation_at(lo, la)[0]) for lo, la, _, _ in grid])
+                keep = elevs >= np.nanquantile(elevs, 1.0 - args.search_top_fraction)
+                cand = [g for g, k in zip(grid, keep, strict=True) if k]
+                print(
+                    f"  searching {len(cand)} crest candidates (top {args.search_top_fraction:.0%} "
+                    f"by elevation of {len(grid)} points within {args.search_radius_m:g} m; "
+                    f"elevation range {np.nanmin(elevs):.0f}..{np.nanmax(elevs):.0f} m) ..."
+                )
+                for lo, la, dx, dy in cand:
+                    f2, _ = illumination_series(
+                        dem, la, lo, h, ets, args.search_n_az, step_m=dem.pixel_m
+                    )
                     _, w2 = solar.worst_window(f2, step_s)
                     if best is None or w2 > best["worst_lunar_day_anchored_mean"]:
                         best = {
@@ -185,15 +207,33 @@ def main(argv: list[str] | None = None) -> int:
                             "mean_illumination_whole_period": float(f2.mean()),
                         }
                 assert best is not None
+                # Re-evaluate the best point at full settings so the quoted number is comparable.
+                f3, _ = illumination_series(
+                    dem, best["lat_deg"], best["lon_deg"], h, ets, args.n_az
+                )
+                i3, w3 = solar.worst_window(f3, step_s)
+                best["worst_lunar_day_anchored_mean_full"] = float(w3)
+                best["worst_lunar_day_start_full"] = when(i3)
+                best["worst_lunar_day_sliding_mean_full"] = float(
+                    solar.worst_window(f3, step_s, sliding=True)[1]
+                )
+                best["search"] = {
+                    "radius_m": args.search_radius_m,
+                    "step_m": args.search_step_m,
+                    "top_fraction_by_elevation": args.search_top_fraction,
+                    "candidates": len(cand),
+                    "n_az": args.search_n_az,
+                }
                 entry["best_within_search_radius"] = best
                 entry["residual_vs_0.71_best_point"] = (
-                    best["worst_lunar_day_anchored_mean"] - REFERENCE["value"]
+                    best["worst_lunar_day_anchored_mean_full"] - REFERENCE["value"]
                 )
                 print(
                     f"  best point within {args.search_radius_m:g} m: worst lunar day "
-                    f"{best['worst_lunar_day_anchored_mean']:.3f} at ({best['lat_deg']:.4f}, "
-                    f"{best['lon_deg']:.4f}) offset E {best['offset_east_m']:+.0f} m "
-                    f"N {best['offset_north_m']:+.0f} m"
+                    f"{best['worst_lunar_day_anchored_mean_full']:.3f} (search-res "
+                    f"{best['worst_lunar_day_anchored_mean']:.3f}) at ({best['lat_deg']:.4f}, "
+                    f"{best['lon_deg']:.4f}) elev {best['terrain_elev_m']:.0f} m, offset "
+                    f"E {best['offset_east_m']:+.0f} m N {best['offset_north_m']:+.0f} m"
                 )
             results.append(entry)
 
