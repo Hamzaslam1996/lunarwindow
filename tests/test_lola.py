@@ -23,7 +23,16 @@ def ang_diff(a, b):
     return (np.asarray(a) - np.asarray(b) + 180.0) % 360.0 - 180.0
 
 
-def _write(path: Path, data: np.ndarray, *, dtype="float32", scales=None, offsets=None, crs=True):
+def _write(
+    path: Path,
+    data: np.ndarray,
+    *,
+    dtype="float32",
+    scales=None,
+    offsets=None,
+    crs=True,
+    nodata=None,
+):
     half = (N / 2) * PIX  # left/top edge so that pixel (200,200) is centred on the pole
     tfm = Affine(PIX, 0.0, -half, 0.0, -PIX, half)
     profile = {
@@ -35,6 +44,8 @@ def _write(path: Path, data: np.ndarray, *, dtype="float32", scales=None, offset
         "transform": tfm,
         "crs": lola.south_polar_stereo_crs() if crs else None,
     }
+    if nodata is not None:
+        profile["nodata"] = nodata
     with rasterio.open(path, "w", **profile) as dst:
         dst.write(data.astype(dtype), 1)
         if scales:
@@ -123,6 +134,18 @@ def test_pds_scale_offset_yields_heights(tmp_path: Path):
     assert np.allclose(dem.data, 123.0)
     dem_km = LolaDem.open(p, values="radius_m")
     assert np.allclose(dem_km.data, 123.0)
+
+
+def test_int16_nodata_becomes_nan(tmp_path: Path):
+    # Real PDS LDEM tiles are int16 with a NULL constant (-32768); nodata must become NaN.
+    raw = np.full((N, N), 246, dtype=np.int16)
+    raw[:5, :] = -32768
+    p = tmp_path / "pds_nodata.tif"
+    _write(p, raw, dtype="int16", scales=(0.5,), offsets=(R_M,), nodata=-32768)
+    dem = LolaDem.open(p)
+    assert np.isnan(dem.data[:5]).all()
+    assert np.allclose(dem.data[5:], 123.0)
+    assert dem.nodata_fraction == pytest.approx(5 / N)
 
 
 def test_radius_km_mode(tmp_path: Path):

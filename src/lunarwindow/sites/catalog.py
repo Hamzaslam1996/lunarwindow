@@ -10,7 +10,8 @@ from __future__ import annotations
 from lunarwindow.ephemeris.geometry import Site
 
 REFERENCE_SITES: list[Site] = [
-    Site("Shackleton Rim (Connecting Ridge)", -89.45, 222.7),
+    # Connecting Ridge between Shackleton and de Gerlache (Gläser et al. 2014 "CR1", ~1.9 km).
+    Site("Shackleton Connecting Ridge", -89.45, 222.7),
     Site("Peak near Shackleton", -89.68, 196.0),
     Site("Malapert Massif", -85.99, 357.0),
     Site("Nobile Rim 1", -85.2, 36.0),

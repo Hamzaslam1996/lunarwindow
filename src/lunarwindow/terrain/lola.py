@@ -121,14 +121,17 @@ class LolaDem:
             tfm = src.transform
             src_crs = crs or src.crs
             tags = src.tags()
-            product_id = str(tags.get("PRODUCT_ID", p.stem)).strip('"')
+            # PDS GDR labels may omit PRODUCT_ID (GDAL then reports ""); fall back to the file stem.
+            product_id = str(tags.get("PRODUCT_ID", "")).strip('" ') or p.stem.upper()
         if src_crs is None or not str(src_crs):
             log.warning("%s carries no CRS; assuming south polar stereographic (lon_0=0)", p)
             src_crs = south_polar_stereo_crs()
         px, py = abs(tfm.a), abs(tfm.e)
         if not np.isclose(px, py, rtol=1e-6):
             raise ValueError(f"non-square pixels ({px} × {py} m) are not supported")
-        heights = _to_height_m(np.ma.filled(raw, np.nan), scale, offset, values)
+        # PDS LDEM products are int16 with a NULL constant; promote before filling with NaN.
+        raw_f = np.ma.filled(raw.astype(np.float64), np.nan)
+        heights = _to_height_m(raw_f, scale, offset, values)
         heights = np.where(np.ma.getmaskarray(raw), np.nan, heights).astype(np.float32)
         nodata_fraction = float(np.isnan(heights).mean())
         return cls(

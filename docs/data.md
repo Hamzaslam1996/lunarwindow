@@ -4,7 +4,12 @@
 - `naif0012.tls` leapseconds
 - `pck00011.tpc` planetary constants
 - `de440.bsp` planetary/lunar ephemeris
-- `moon_pa_de440_200625.bpc` + `moon_de440_220930.tf` lunar orientation and `MOON_ME` / `MOON_PA` frames
+- `moon_pa_de440_200625.bpc` + `moon_de440_250416.tf` lunar orientation and `MOON_ME` / `MOON_PA` frames
+  (NAIF replaced `moon_de440_220930.tf` with the 2025-04-16 frame kernel; the frame definitions are unchanged)
+
+Note: the LOLA polar DEMs are labelled `MEAN EARTH/POLAR AXIS OF DE421`. The DE421 and DE440
+mean-Earth frames differ by well under a metre at the surface, far below the 20 m pixel, so no
+transformation is applied (ADR 0001).
 
 ## LOLA DEMs (PDS Geosciences Node, LRO LOLA RDR) — fetched by `scripts/fetch_dem.py`
 

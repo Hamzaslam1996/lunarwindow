@@ -23,7 +23,7 @@ KERNELS: dict[str, str] = {
     "de440.bsp": f"{NAIF}/spk/planets/de440.bsp",
     # lunar orientation (DE440-consistent) and frame definitions
     "moon_pa_de440_200625.bpc": f"{NAIF}/pck/moon_pa_de440_200625.bpc",
-    "moon_de440_220930.tf": f"{NAIF}/fk/satellites/moon_de440_220930.tf",
+    "moon_de440_250416.tf": f"{NAIF}/fk/satellites/moon_de440_250416.tf",
 }
 
 
