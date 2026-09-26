@@ -30,11 +30,13 @@ For each site × date window:
 ```bash
 uv sync --all-extras
 uv run python scripts/fetch_kernels.py     # ~120 MB from NAIF
+uv run python scripts/fetch_dem.py         # LDEM_875S_20M, ~115 MB from the PDS Geosciences Node
 make check                                  # lint, types, tests (kernel tests run once kernels exist)
+uv run python scripts/plot_horizon.py      # docs/figures/shackleton_connecting_ridge_horizon.png
 make api                                    # http://localhost:8000/docs
 ```
 
-DEMs: LOLA polar stereographic GeoTIFFs from the PDS Geosciences Node — see `docs/data.md`.
+DEMs: LOLA polar stereographic GDR tiles from the PDS Geosciences Node — see `docs/data.md`.
 
 ## Method and limits
 
