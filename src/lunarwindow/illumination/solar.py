@@ -12,6 +12,55 @@ import numpy as np
 
 from lunarwindow.terrain.horizon import HorizonMask
 
+#: Mean synodic month (one "lunar day"), seconds.
+SYNODIC_MONTH_S = 29.530589 * 86400.0
+
+
+def window_means(frac: np.ndarray, step_s: float, window_s: float = SYNODIC_MONTH_S) -> np.ndarray:
+    """Mean of `frac` over consecutive, non-overlapping windows of `window_s` seconds.
+
+    Windows are anchored at index 0; a trailing partial window is dropped. With the default
+    window this is the "lunar-day average" used in polar power studies (Fincannon 2007).
+    """
+    n = int(round(window_s / step_s))
+    if n <= 0:
+        raise ValueError("window shorter than one step")
+    m = len(frac) // n
+    if m == 0:
+        return np.empty(0)
+    return np.asarray(frac[: m * n], dtype=float).reshape(m, n).mean(axis=1)
+
+
+def sliding_window_means(
+    frac: np.ndarray, step_s: float, window_s: float = SYNODIC_MONTH_S
+) -> np.ndarray:
+    """Mean of `frac` over every window of `window_s` seconds starting at each step."""
+    n = int(round(window_s / step_s))
+    if n <= 0 or n > len(frac):
+        return np.empty(0)
+    c = np.concatenate([[0.0], np.cumsum(np.asarray(frac, dtype=float))])
+    return (c[n:] - c[:-n]) / n
+
+
+def worst_window(
+    frac: np.ndarray, step_s: float, window_s: float = SYNODIC_MONTH_S, *, sliding: bool = False
+) -> tuple[int, float]:
+    """(start_index, mean) of the window with the lowest mean illumination.
+
+    `sliding=False` uses the anchored non-overlapping windows of :func:`window_means`;
+    `sliding=True` considers every start step and is therefore a lower bound on any anchoring.
+    """
+    n = int(round(window_s / step_s))
+    means = (
+        sliding_window_means(frac, step_s, window_s)
+        if sliding
+        else window_means(frac, step_s, window_s)
+    )
+    if means.size == 0:
+        raise ValueError("period shorter than one window")
+    i = int(np.argmin(means))
+    return (i if sliding else i * n), float(means[i])
+
 
 def disc_fraction_above(
     delta_deg: np.ndarray | float, radius_deg: np.ndarray | float
