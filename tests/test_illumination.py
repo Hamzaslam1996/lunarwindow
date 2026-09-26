@@ -1,12 +1,38 @@
 import numpy as np
+import pytest
 
 from lunarwindow.illumination.solar import (
     disc_fraction_above,
     illumination_fraction,
+    sliding_window_means,
     solar_power_relative,
     summarise,
+    window_means,
+    worst_window,
 )
 from lunarwindow.terrain.horizon import flat_horizon
+
+
+def test_window_means_anchored_and_partial_dropped():
+    frac = np.array([1, 1, 0, 0, 1, 0, 1, 1, 1, 0.5], dtype=float)
+    m = window_means(frac, step_s=1.0, window_s=4.0)  # windows of 4 steps → 2 full windows
+    assert np.allclose(m, [0.5, 0.75])
+    assert window_means(frac[:3], 1.0, 4.0).size == 0
+    with pytest.raises(ValueError):
+        window_means(frac, step_s=10.0, window_s=4.0)
+
+
+def test_sliding_window_means_and_worst_window():
+    frac = np.array([1, 1, 0, 0, 0, 1, 1, 1], dtype=float)
+    s = sliding_window_means(frac, 1.0, 4.0)
+    assert np.allclose(s, [0.5, 0.25, 0.25, 0.5, 0.75])
+    start, val = worst_window(frac, 1.0, 4.0, sliding=True)
+    assert (start, val) == (1, 0.25)
+    start_a, val_a = worst_window(frac, 1.0, 4.0)  # anchored: [1,1,0,0]→0.5, [0,1,1,1]→0.75
+    assert (start_a, val_a) == (0, 0.5)
+    assert val <= val_a  # sliding minimum is a lower bound on any anchoring
+    with pytest.raises(ValueError):
+        worst_window(frac[:2], 1.0, 4.0)
 
 
 def test_disc_fraction_limits_and_symmetry():
